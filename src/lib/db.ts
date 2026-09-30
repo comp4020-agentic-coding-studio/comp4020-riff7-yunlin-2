@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { type Booking, type Room, bookings, rooms } from "./schema";
@@ -47,7 +47,7 @@ export function listBookingsForDate(date: string): Booking[] {
   return db.select().from(bookings).where(eq(bookings.date, date)).orderBy(bookings.startTime).all();
 }
 
-function overlaps(a: Booking | NewBooking, b: Booking): boolean {
+function overlaps(a: { startTime: string; endTime: string }, b: Booking): boolean {
   return a.startTime < b.endTime && a.endTime > b.startTime;
 }
 
@@ -82,4 +82,27 @@ export function addBooking(candidate: NewBooking): Booking {
 export function cancelBooking(id: number): string | null {
   const removed = db.delete(bookings).where(eq(bookings.id, id)).returning().all();
   return removed[0]?.date ?? null;
+}
+
+// Riff: check-in. The real annoyance this README names — no way to tell
+// from the booking system alone whether anyone's actually turned up — isn't
+// closed by the "happening now" highlight alone, since that's true whether
+// or not anyone showed. Recording a confirmation is the other half.
+// Returns the checked-in booking's own date, or null if no booking with
+// that id existed.
+export function checkInBooking(id: number): string | null {
+  const updated = db
+    .update(bookings)
+    .set({ checkedInAt: sql`(datetime('now'))` })
+    .where(eq(bookings.id, id))
+    .returning()
+    .all();
+  return updated[0]?.date ?? null;
+}
+
+/** The first room with no booking overlapping the given window, or null if every room clashes. */
+export function findFreeRoom(date: string, startTime: string, endTime: string): Room | null {
+  const candidate = { startTime, endTime };
+  const bookingsForDate = listBookingsForDate(date);
+  return listRooms().find((room) => !bookingsForDate.some((b) => b.roomId === room.id && overlaps(candidate, b))) ?? null;
 }

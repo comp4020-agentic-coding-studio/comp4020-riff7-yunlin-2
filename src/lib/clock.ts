@@ -1,6 +1,25 @@
-function toMinutes(hhmm: string): number {
+export function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
+}
+
+// How many minutes of a booking have elapsed, for the check-in grace period
+// (src/pages/index.astro) — only meaningful while the booking is today's and
+// currently active; callers guard that themselves.
+export function minutesSince(nowTime: string, pastTime: string): number {
+  return toMinutes(nowTime) - toMinutes(pastTime);
+}
+
+// "Find me a room now": the end of a window starting now, or null if that
+// window would run past midnight — a window crossing into tomorrow is out
+// of scope for this riff, same call the rest of the board makes about not
+// reasoning across a day boundary in wall-clock arithmetic.
+export function addMinutesToTime(hhmm: string, minutes: number): string | null {
+  const total = toMinutes(hhmm) + minutes;
+  if (total > 24 * 60) return null;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 export function canberraParts(d: Date): { date: string; time: string } {

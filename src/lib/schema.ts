@@ -27,6 +27,11 @@ export const bookings = sqliteTable("bookings", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),
+  // Set the moment someone confirms they've actually turned up (riff:
+  // check-in). Null means "booked but not yet confirmed present" — the
+  // state the real ANU Library system can't tell you, and the gap this
+  // riff closes.
+  checkedInAt: text("checked_in_at"),
 });
 
 export type Room = typeof rooms.$inferSelect;

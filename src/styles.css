@@ -7,6 +7,8 @@
   --line: #262b38;
   --accent: #ff5d5d;
   --accent-glow: color-mix(in srgb, var(--accent) 35%, transparent);
+  --warn: #e0a030;
+  --warn-glow: color-mix(in srgb, var(--warn) 35%, transparent);
   --link: #7aa2ff;
   --radius: 0.9rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -21,6 +23,8 @@
   --line: #dde0e9;
   --accent: #d63b3b;
   --accent-glow: color-mix(in srgb, var(--accent) 20%, transparent);
+  --warn: #b3760f;
+  --warn-glow: color-mix(in srgb, var(--warn) 20%, transparent);
   --link: #2b57d6;
 }
 
@@ -99,6 +103,42 @@ nav[aria-label="date"] a:hover {
   opacity: 0.7;
 }
 
+.find-room {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-block: 1rem;
+}
+
+.find-room a {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  text-decoration: none;
+  color: var(--ink);
+  transition:
+    background-color 0.15s var(--ease),
+    transform 0.15s var(--ease);
+}
+
+.find-room a:hover {
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+
+.notice {
+  border: 1px solid var(--link);
+  background: color-mix(in srgb, var(--link) 12%, transparent);
+  color: var(--ink);
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  animation: rise 0.3s var(--ease) both;
+}
+
 .error {
   border: 1px solid var(--accent);
   background: var(--accent-glow);
@@ -138,6 +178,44 @@ nav[aria-label="date"] a:hover {
   font-weight: 600;
 }
 
+.timeline {
+  position: relative;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  margin-bottom: 0.85rem;
+  overflow: visible;
+}
+
+.timeline-block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  border-radius: 999px;
+  background: var(--muted);
+  opacity: 0.55;
+}
+
+.timeline-block.active {
+  background: var(--accent);
+  opacity: 1;
+}
+
+.timeline-block.stale {
+  background: var(--warn);
+  opacity: 1;
+}
+
+.timeline-now {
+  position: absolute;
+  top: -0.2rem;
+  bottom: -0.2rem;
+  width: 2px;
+  background: var(--link);
+  border-radius: 999px;
+}
+
 .room ul {
   list-style: none;
   margin: 0;
@@ -168,9 +246,31 @@ nav[aria-label="date"] a:hover {
   font-weight: 600;
 }
 
+.room li.stale {
+  background: var(--warn-glow);
+  border-left-color: var(--warn);
+  animation: none;
+}
+
+.room li.stale .time::after {
+  content: " — unconfirmed";
+  color: var(--warn);
+}
+
 .room li.empty {
   color: var(--muted);
   font-style: italic;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-left: 0.5rem;
+}
+
+.badge.stale {
+  color: var(--warn);
 }
 
 .time {
@@ -304,7 +404,8 @@ nav[aria-label="date"] a:hover {
   main,
   .room,
   .book-form,
-  .error {
+  .error,
+  .notice {
     animation: none;
     opacity: 1;
   }

@@ -1,7 +1,19 @@
 ---
-import { canberraParts, canberraWallTimeToEpochMs, nextReloadTargetEpochMs, shiftDate } from "../lib/clock";
-import { listBookingsForDate, listRooms } from "../lib/db";
+import {
+  addMinutesToTime,
+  canberraParts,
+  canberraWallTimeToEpochMs,
+  minutesSince,
+  nextReloadTargetEpochMs,
+  shiftDate,
+  toMinutes,
+} from "../lib/clock";
+import { findFreeRoom, listBookingsForDate, listRooms } from "../lib/db";
 import "../styles.css";
+
+// Riff: how long an active booking can go unconfirmed before the board
+// stops trusting it — see checkedInAt in src/lib/schema.ts.
+const GRACE_MINUTES = 10;
 
 // All times on this board are Canberra wall-clock text (see src/lib/schema.ts)
 // — "now" has to be read the same way, regardless of what timezone the
@@ -27,12 +39,35 @@ const bookingsForDate = listBookingsForDate(date);
 // expression as the start of a tag, so that comparison can't live inline in
 // the template below.
 const isNowWithin = (start: string, end: string) => isToday && start <= nowTime && nowTime < end;
+const dayStartMin = 0;
+const dayMinutes = 24 * 60;
+const nowPct = isToday ? (toMinutes(nowTime) / dayMinutes) * 100 : null;
 const roomsWithBookings = rooms.map((room) => ({
   room,
   bookings: bookingsForDate
     .filter((b) => b.roomId === room.id)
-    .map((b) => ({ ...b, active: isNowWithin(b.startTime, b.endTime) })),
+    .map((b) => {
+      const active = isNowWithin(b.startTime, b.endTime);
+      const checkedIn = b.checkedInAt !== null;
+      // "Stale" only ever applies to the live slot, never to a booking
+      // whose grace period we'd have to reconstruct after the fact for a
+      // past date — this board only ever asserts it about right now.
+      const stale = active && !checkedIn && minutesSince(nowTime, b.startTime) >= GRACE_MINUTES;
+      const leftPct = ((toMinutes(b.startTime) - dayStartMin) / dayMinutes) * 100;
+      const widthPct = ((toMinutes(b.endTime) - toMinutes(b.startTime)) / dayMinutes) * 100;
+      return { ...b, active, checkedIn, stale, leftPct, widthPct };
+    }),
 }));
+
+// Riff: "find me a room now" — a duration in the `find` query param looks
+// for a room with nothing booked between now and now-plus-that-many-minutes,
+// and (if one exists) prefills the booking form with it. Only meaningful for
+// today's own view; a date-nav click elsewhere drops it, same as `error`.
+const findMinutesParam = Number(Astro.url.searchParams.get("find"));
+const findMinutes = isToday && Number.isInteger(findMinutesParam) && findMinutesParam > 0 ? findMinutesParam : null;
+const findWindowEnd = findMinutes !== null ? addMinutesToTime(nowTime, findMinutes) : null;
+const foundRoom = findWindowEnd !== null ? findFreeRoom(date, nowTime, findWindowEnd) : null;
+const findFailed = findMinutes !== null && foundRoom === null;
 
 // Passed to the client script below so a tab left open across a booking's
 // start/end minute — or across midnight, with no bookings left to wait for
@@ -104,21 +139,65 @@ const nextBoundaryTarget = isToday
         </p>
       )}
 
+      {isToday && (
+        <nav class="find-room" aria-label="find a room now">
+          <span>Find me a room now, for</span>
+          <a href={`/?find=15`}>15 min</a>
+          <a href={`/?find=30`}>30 min</a>
+          <a href={`/?find=60`}>1 hour</a>
+        </nav>
+      )}
+
+      {foundRoom && (
+        <p class="notice" role="status">
+          <strong>{foundRoom.name}</strong> is free right now for the next {findMinutes} minutes — filled into the
+          form below, just add your name.
+        </p>
+      )}
+      {findFailed && (
+        <p class="notice" role="status">
+          No room is free for the next {findMinutes} minutes right now.
+        </p>
+      )}
+
       <div class="rooms">
         {roomsWithBookings.map(({ room, bookings }, i) => (
           <section class="room" style={`--i: ${i}`} aria-labelledby={`room-${room.id}`}>
             <h2 id={`room-${room.id}`}>{room.name}</h2>
+            <div class="timeline" aria-hidden="true">
+              {bookings.map((booking) => (
+                <div
+                  class={`timeline-block${booking.stale ? " stale" : booking.active ? " active" : ""}`}
+                  style={`left:${booking.leftPct}%; width:${booking.widthPct}%`}
+                />
+              ))}
+              {nowPct !== null && <div class="timeline-now" style={`left:${nowPct}%`} />}
+            </div>
             <ul>
               {bookings.length === 0 && <li class="empty">Free all day</li>}
               {bookings.map((booking) => (
-                <li class={booking.active ? "active" : undefined}>
+                <li class={booking.stale ? "active stale" : booking.active ? "active" : undefined}>
                   <span class="time">
                     {booking.startTime}–{booking.endTime}
                   </span>
-                  <span class="who">{booking.bookedBy}</span>
+                  <span class="who">
+                    {booking.bookedBy}
+                    {booking.checkedIn && (
+                      <span class="badge" title="Confirmed present">
+                        ✓ here
+                      </span>
+                    )}
+                    {booking.stale && <span class="badge stale">possibly vacant</span>}
+                  </span>
+                  {booking.active && !booking.checkedIn && (
+                    <form method="post" action={`/api/bookings/${booking.id}/checkin`}>
+                      <input type="hidden" name="date" value={date} />
+                      <button type="submit">I'm here</button>
+                    </form>
+                  )}
                   <form method="post" action={`/api/bookings/${booking.id}/cancel`}>
                     <input type="hidden" name="date" value={date} />
-                    <button type="submit">Cancel</button>
+                    <button type="submit">{booking.stale ? "Free this slot" : "Cancel"}</button>
                   </form>
                 </li>
               ))}
@@ -134,7 +213,9 @@ const nextBoundaryTarget = isToday
           <label for="roomId">Room</label>
           <select id="roomId" name="roomId" required>
             {rooms.map((room) => (
-              <option value={room.id}>{room.name}</option>
+              <option value={room.id} selected={foundRoom?.id === room.id}>
+                {room.name}
+              </option>
             ))}
           </select>
         </div>
@@ -144,11 +225,11 @@ const nextBoundaryTarget = isToday
         </div>
         <div>
           <label for="startTime">From</label>
-          <input id="startTime" name="startTime" type="time" required />
+          <input id="startTime" name="startTime" type="time" required value={foundRoom ? nowTime : undefined} />
         </div>
         <div>
           <label for="endTime">To</label>
-          <input id="endTime" name="endTime" type="time" required />
+          <input id="endTime" name="endTime" type="time" required value={foundRoom ? findWindowEnd : undefined} />
         </div>
         <button>Book {date}</button>
       </form>
