@@ -39,14 +39,6 @@ const bookingsForDate = listBookingsForDate(date);
 // expression as the start of a tag, so that comparison can't live inline in
 // the template below.
 const isNowWithin = (start: string, end: string) => isToday && start <= nowTime && nowTime < end;
-const dayStartMin = 0;
-const dayMinutes = 24 * 60;
-const nowPct = isToday ? (toMinutes(nowTime) / dayMinutes) * 100 : null;
-// Real library booking grids (LibCal, used across most university libraries)
-// put rooms in rows and time across columns, colouring cells by status rather
-// than by room — this board's own accent/warn colours already mean "now" and
-// "unconfirmed", so the grid reuses them instead of inventing a colour per room.
-const HOUR_LABELS = [0, 3, 6, 9, 12, 15, 18, 21];
 const roomsWithBookings = rooms.map((room) => ({
   room,
   bookings: bookingsForDate
@@ -58,11 +50,49 @@ const roomsWithBookings = rooms.map((room) => ({
       // whose grace period we'd have to reconstruct after the fact for a
       // past date — this board only ever asserts it about right now.
       const stale = active && !checkedIn && minutesSince(nowTime, b.startTime) >= GRACE_MINUTES;
-      const leftPct = ((toMinutes(b.startTime) - dayStartMin) / dayMinutes) * 100;
-      const widthPct = ((toMinutes(b.endTime) - toMinutes(b.startTime)) / dayMinutes) * 100;
-      return { ...b, active, checkedIn, stale, leftPct, widthPct };
+      return { ...b, active, checkedIn, stale };
     }),
 }));
+
+// Riff: a LibCal-style availability grid — rooms as rows, 30-minute slots
+// across 08:00-22:00 as real, individually clickable <button>s, replacing the
+// old read-only per-room list as the board's primary view. Real library
+// systems (LibCal, used across most university libraries) lay it out this
+// way — rooms in rows, time in columns — so this follows that rather than
+// inventing a new layout.
+const GRID_START = "08:00";
+const GRID_END = "22:00";
+const SLOT_MINUTES = 30;
+const gridStartMin = toMinutes(GRID_START);
+const gridEndMin = toMinutes(GRID_END);
+const slotTimes = Array.from({ length: (gridEndMin - gridStartMin) / SLOT_MINUTES }, (_, i) => {
+  const start = addMinutesToTime(GRID_START, i * SLOT_MINUTES)!;
+  return { start, end: addMinutesToTime(start, SLOT_MINUTES)! };
+});
+const gridRooms = roomsWithBookings.map(({ room, bookings }) => ({
+  room,
+  slots: slotTimes.map(({ start, end }) => {
+    if (isToday && end <= nowTime) {
+      return { start, end, status: "past" as const, label: `${room.name}, ${start}–${end}, unavailable, past` };
+    }
+    const hit = bookings.find((b) => start < b.endTime && end > b.startTime);
+    if (hit) {
+      const suffix = hit.stale ? ", unconfirmed" : hit.active ? ", now" : "";
+      return {
+        start,
+        end,
+        status: "booked" as const,
+        label: `${room.name}, ${start}–${end}, booked by ${hit.bookedBy}${suffix}`,
+        bookedBy: hit.bookedBy,
+      };
+    }
+    return { start, end, status: "free" as const, label: `${room.name}, ${start}–${end}, free` };
+  }),
+}));
+const gridNowPct =
+  isToday && nowTime >= GRID_START && nowTime < GRID_END
+    ? ((toMinutes(nowTime) - gridStartMin) / (gridEndMin - gridStartMin)) * 100
+    : null;
 
 // Riff: "find me a room now" — a duration in the `find` query param looks
 // for a room with nothing booked between now and now-plus-that-many-minutes,
@@ -138,31 +168,38 @@ const nextBoundaryTarget = isToday
         <a href={`/?date=${shiftDate(date, 1)}`}>{shiftDate(date, 1)} &rarr;</a>
       </nav>
 
-      <section class="grid-board" aria-hidden="true">
-        <div class="grid-row grid-row-header">
-          <span class="grid-label"></span>
-          <div class="grid-track grid-track-header">
-            {HOUR_LABELS.map((h) => (
-              <span class="hour-label" style={`left:${(h / 24) * 100}%`}>
-                {String(h).padStart(2, "0")}:00
-              </span>
-            ))}
-          </div>
-        </div>
-        {roomsWithBookings.map(({ room, bookings }) => (
-          <div class="grid-row">
-            <span class="grid-label">{room.name}</span>
-            <div class="grid-track">
-              {bookings.map((booking) => (
-                <div
-                  class={`grid-block${booking.stale ? " stale" : booking.active ? " active" : ""}`}
-                  style={`left:${booking.leftPct}%; width:${booking.widthPct}%`}
-                />
-              ))}
-              {nowPct !== null && <div class="grid-now-line" style={`left:${nowPct}%`} />}
+      <section class="avail-grid" aria-label="room availability">
+        <div class="avail-scroll">
+          <div class="avail-row avail-row-header" aria-hidden="true">
+            <span class="avail-label"></span>
+            <div class="avail-track avail-track-header">
+              {slotTimes.map(({ start }, i) => <span class="hour-label">{i % 2 === 0 ? start : ""}</span>)}
             </div>
           </div>
-        ))}
+          {gridRooms.map(({ room, slots }) => (
+            <div class="avail-row">
+              <span class="avail-label">{room.name}</span>
+              <div class="avail-track">
+                {slots.map((slot) => (
+                  <button
+                    type="button"
+                    class={`slot slot-${slot.status}`}
+                    data-room={room.id}
+                    data-start={slot.start}
+                    data-end={slot.end}
+                    data-status={slot.status}
+                    disabled={slot.status !== "free"}
+                    aria-label={slot.label}
+                  >
+                    {slot.status === "booked" ? slot.bookedBy : slot.status === "past" ? "×" : ""}
+                  </button>
+                ))}
+                {gridNowPct !== null && <span class="avail-now-line" style={`left:${gridNowPct}%`} aria-hidden="true" />}
+              </div>
+            </div>
+          ))}
+        </div>
+        <p class="avail-selection" id="avail-selection" hidden></p>
       </section>
 
       {error && (
@@ -300,6 +337,83 @@ const nextBoundaryTarget = isToday
       if (nextBoundaryTarget !== null) {
         setTimeout(() => location.reload(), Math.max(0, nextBoundaryTarget - Date.now()) + 5_000);
       }
+
+      // Riff: turns the availability grid's free <button>s into a range
+      // picker. A pivot ("anchor") is set by the first slot clicked; every
+      // click or drag after that re-extends the range from that same pivot,
+      // clipped to the longest run of *free* slots reachable in that
+      // direction — so the selection can never cross a booked or past slot.
+      // Reuses the existing booking form/endpoint rather than adding a new
+      // one: picking a range just fills in the same roomId/startTime/endTime
+      // fields the manual From/To fallback also writes to.
+      const slotButtons = Array.from(document.querySelectorAll("button.slot"));
+      const byRoom = {};
+      for (const btn of slotButtons) {
+        const key = btn.dataset.room;
+        (byRoom[key] ??= []).push(btn);
+      }
+      let anchor = null;
+      const selectionEl = document.getElementById("avail-selection");
+      const roomSelect = document.getElementById("roomId");
+      const startInput = document.getElementById("startTime");
+      const endInput = document.getElementById("endTime");
+      const bookedByInput = document.getElementById("bookedBy");
+
+      function freeRun(room, fromIdx, toIdx) {
+        const slots = byRoom[room];
+        const dir = toIdx >= fromIdx ? 1 : -1;
+        let end = fromIdx;
+        for (let i = fromIdx; dir > 0 ? i <= toIdx : i >= toIdx; i += dir) {
+          if (slots[i].dataset.status !== "free") break;
+          end = i;
+        }
+        return dir > 0 ? [fromIdx, end] : [end, fromIdx];
+      }
+
+      function applyRange(room, loIdx, hiIdx) {
+        const slots = byRoom[room];
+        for (const btn of slotButtons) btn.classList.remove("selected");
+        for (let i = loIdx; i <= hiIdx; i++) slots[i].classList.add("selected");
+        const start = slots[loIdx].dataset.start;
+        const end = slots[hiIdx].dataset.end;
+        const roomName = slots[0].closest(".avail-row").querySelector(".avail-label").textContent;
+        selectionEl.hidden = false;
+        selectionEl.textContent = `${roomName}, ${start}-${end}`;
+        roomSelect.value = room;
+        startInput.value = start;
+        endInput.value = end;
+        bookedByInput?.focus();
+      }
+
+      let dragging = false;
+      document.querySelectorAll(".avail-track:not(.avail-track-header)").forEach((track) => {
+        track.addEventListener("mousedown", (e) => {
+          const btn = e.target.closest("button.slot");
+          if (!btn || btn.disabled) return;
+          e.preventDefault();
+          const room = btn.dataset.room;
+          const idx = byRoom[room].indexOf(btn);
+          if (anchor && anchor.dataset.room === room && anchor !== btn) {
+            const [lo, hi] = freeRun(room, byRoom[room].indexOf(anchor), idx);
+            applyRange(room, lo, hi);
+          } else {
+            anchor = btn;
+            applyRange(room, idx, idx);
+          }
+          dragging = true;
+        });
+        track.addEventListener("mouseover", (e) => {
+          if (!dragging || !anchor) return;
+          const btn = e.target.closest("button.slot");
+          if (!btn || btn.dataset.room !== anchor.dataset.room) return;
+          const room = anchor.dataset.room;
+          const [lo, hi] = freeRun(room, byRoom[room].indexOf(anchor), byRoom[room].indexOf(btn));
+          applyRange(room, lo, hi);
+        });
+      });
+      window.addEventListener("mouseup", () => {
+        dragging = false;
+      });
 
       // Theme toggle: a purely client-side preference, kept in localStorage
       // and mirrored onto <html data-theme> — the <head> script above reads

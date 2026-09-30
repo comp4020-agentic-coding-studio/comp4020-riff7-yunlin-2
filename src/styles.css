@@ -178,9 +178,7 @@ nav[aria-label="date"] a:hover {
   font-weight: 600;
 }
 
-.grid-board {
-  display: grid;
-  gap: 0.5rem;
+.avail-grid {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -190,76 +188,106 @@ nav[aria-label="date"] a:hover {
   animation: rise 0.5s var(--ease) both;
 }
 
-.grid-row {
+.avail-scroll {
+  overflow-x: auto;
   display: grid;
-  grid-template-columns: 9rem 1fr;
+  gap: 0.4rem;
+}
+
+.avail-row {
+  display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.grid-label {
+.avail-label {
+  flex: 0 0 9rem;
+  position: sticky;
+  left: 0;
+  background: var(--surface);
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  z-index: 1;
 }
 
-.grid-track {
+.avail-track {
   position: relative;
-  height: 1.5rem;
-  border-radius: 0.4rem;
-  background:
-    repeating-linear-gradient(
-      to right,
-      var(--line) 0,
-      var(--line) 1px,
-      transparent 1px,
-      transparent calc(100% / 24)
-    ),
-    var(--surface-2);
+  display: flex;
 }
 
-.grid-track-header {
+.avail-track-header {
   height: 1.1rem;
-  background: none;
 }
 
 .hour-label {
-  position: absolute;
-  transform: translateX(-50%);
+  flex: 0 0 2.5rem;
   font-size: 0.68rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
-.grid-block {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  min-width: 3px;
-  border-radius: 0.3rem;
+button.slot {
+  flex: 0 0 2.5rem;
+  height: 1.8rem;
+  padding: 0;
+  font: inherit;
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  margin-left: -1px;
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button.slot.slot-free:hover {
+  background: color-mix(in srgb, var(--link) 15%, var(--surface-2));
+}
+
+button.slot.slot-booked {
   background: var(--muted);
-  opacity: 0.6;
+  color: var(--surface);
+  cursor: default;
 }
 
-.grid-block.active {
-  background: var(--accent);
-  opacity: 1;
+button.slot.slot-past {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface-2) 0,
+    var(--surface-2) 4px,
+    var(--line) 4px,
+    var(--line) 8px
+  );
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
-.grid-block.stale {
-  background: var(--warn);
-  opacity: 1;
+button.slot.selected {
+  background: var(--link);
+  color: var(--surface);
+  border-color: var(--link);
 }
 
-.grid-now-line {
+.avail-now-line {
   position: absolute;
   top: -2px;
   bottom: -2px;
   width: 2px;
-  background: var(--link);
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.avail-selection {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .room ul {
@@ -450,7 +478,7 @@ nav[aria-label="date"] a:hover {
   main,
   .room,
   .book-form,
-  .grid-board,
+  .avail-grid,
   .error,
   .notice {
     animation: none;
