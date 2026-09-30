@@ -304,4 +304,39 @@ describe("rejecting requests the form itself would never send", () => {
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toContain("error=date");
   });
+
+  it("rejects a well-formed date that's already in the past", async () => {
+    const res = await post(
+      "/api/bookings",
+      new URLSearchParams({ date: "2020-01-01", roomId: "1", startTime: "09:00", endTime: "10:00", bookedBy: "time traveller" }),
+    );
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toContain("error=past");
+    expect(await roomsPage("2020-01-01")).not.toContain("time traveller");
+  });
+});
+
+// The board only renders "I'm here" for a booking it already considers
+// active, but that's a rendering choice, not a guard — the API a raw POST
+// reaches has to refuse the transition itself for any booking that isn't
+// genuinely happening right now.
+describe("checking in to a booking that isn't happening right now", () => {
+  it("rejects check-in for a booking dated far in the future", async () => {
+    const date = "2031-09-01";
+    await post(
+      "/api/bookings",
+      new URLSearchParams({ date, roomId: "1", startTime: "09:00", endTime: "10:00", bookedBy: "not yet here" }),
+    );
+    // The board only renders an "I'm here" form for a booking it already
+    // considers active — this one, dated in 2031, never gets one — so the
+    // id comes from the cancel form every booking renders regardless.
+    const rows = await roomsPage(date);
+    const match = rows.match(/\/api\/bookings\/(\d+)\/cancel/);
+    if (!match) throw new Error("couldn't find the booking's id");
+
+    const res = await post(`/api/bookings/${match[1]}/checkin`, new URLSearchParams({ date }));
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toContain("error=checkin");
+    expect(await roomsPage(date)).not.toContain("Confirmed present");
+  });
 });

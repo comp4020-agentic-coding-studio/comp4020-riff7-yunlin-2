@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { canberraParts } from "./clock";
 import { type Booking, type Room, bookings, rooms } from "./schema";
 
 // One SQLite file is the app's whole persistent state. In production
@@ -37,7 +38,17 @@ if (db.select().from(rooms).limit(1).all().length === 0) {
 export type { Booking, Room };
 
 export class ConflictError extends Error {}
-export class ValidationError extends Error {}
+
+// `code` lets a caller (src/pages/api/bookings.ts) show the right message
+// without parsing `.message` — it defaults to "invalid" so every existing
+// throw site that doesn't pass one keeps working unchanged.
+export class ValidationError extends Error {
+  code: string;
+  constructor(message: string, code = "invalid") {
+    super(message);
+    this.code = code;
+  }
+}
 
 export function listRooms(): Room[] {
   return db.select().from(rooms).orderBy(rooms.id).all();
@@ -64,6 +75,12 @@ interface NewBooking {
 // write, which is what makes the overlap check race-free without a separate
 // SQL constraint.
 export function addBooking(candidate: NewBooking): Booking {
+  // A room can't be booked in the past — checked here, not just by hiding the
+  // date-nav or graying out a slot, since a crafted POST reaches this
+  // function directly regardless of what the board's own date-nav shows.
+  if (candidate.date < canberraParts(new Date()).date) {
+    throw new ValidationError("cannot book a date that has already passed", "past");
+  }
   if (!(candidate.startTime < candidate.endTime)) {
     throw new ValidationError("end time must be after start time");
   }
@@ -91,6 +108,19 @@ export function cancelBooking(id: number): string | null {
 // Returns the checked-in booking's own date, or null if no booking with
 // that id existed.
 export function checkInBooking(id: number): string | null {
+  const existing = db.select().from(bookings).where(eq(bookings.id, id)).get();
+  if (!existing) return null;
+  // The board only renders "I'm here" for a booking that's active right now
+  // (src/pages/index.astro), but that's just which button shows — nothing
+  // stopped a direct POST from confirming presence at a room hours before
+  // anyone could plausibly be in it. Checked here so the claim a checked-in
+  // badge makes ("someone is actually here") stays true regardless of how
+  // the request arrived.
+  const { date: today, time: nowTime } = canberraParts(new Date());
+  const isActiveNow = existing.date === today && existing.startTime <= nowTime && nowTime < existing.endTime;
+  if (!isActiveNow) {
+    throw new ValidationError("can only check in to a booking that is happening right now", "checkin");
+  }
   const updated = db
     .update(bookings)
     .set({ checkedInAt: sql`(datetime('now'))` })

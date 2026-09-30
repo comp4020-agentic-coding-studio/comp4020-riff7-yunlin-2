@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { checkInBooking } from "../../../../lib/db";
+import { ValidationError, checkInBooking } from "../../../../lib/db";
 import { bus } from "../../../../lib/events";
 
 // Riff: the other half of "happening now" — a person on-site confirms it,
@@ -10,9 +10,16 @@ export const POST: APIRoute = async ({ params, request, redirect }) => {
   const id = Number(params.id);
   const form = await request.formData();
   const date = String(form.get("date") ?? "");
+  const back = (error?: string) =>
+    redirect(`/?${new URLSearchParams({ date, ...(error ? { error } : {}) })}`, 303);
   if (Number.isInteger(id)) {
-    const affectedDate = checkInBooking(id);
-    if (affectedDate) bus.emit("booking", { date: affectedDate });
+    try {
+      const affectedDate = checkInBooking(id);
+      if (affectedDate) bus.emit("booking", { date: affectedDate });
+    } catch (err) {
+      if (err instanceof ValidationError) return back(err.code);
+      throw err;
+    }
   }
-  return redirect(`/?${new URLSearchParams({ date })}`, 303);
+  return back();
 };

@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     const booking = addBooking({ roomId, date, startTime, endTime, bookedBy });
     bus.emit("booking", { date: booking.date });
   } catch (err) {
-    if (err instanceof ValidationError) return back("invalid");
+    if (err instanceof ValidationError) return back(err.code);
     if (err instanceof ConflictError) return back("conflict");
     throw err;
   }

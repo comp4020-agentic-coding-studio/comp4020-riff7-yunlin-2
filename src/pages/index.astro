@@ -22,13 +22,20 @@ const { date: today, time: nowTime } = canberraParts(new Date());
 const requestedDate = Astro.url.searchParams.get("date");
 const date = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : today;
 const isToday = date === today;
+// The date-nav has no lower bound, so a click (or a raw ?date= link) can land
+// on any day before today — every slot on such a day is unbookable, the same
+// way an elapsed slot on today is, and src/lib/db.ts's addBooking rejects it
+// regardless of what this page renders.
+const isPastDate = date < today;
 const error = Astro.url.searchParams.get("error");
 
 const errorMessages: Record<string, string> = {
+  checkin: "You can only check in while your booking is actually happening.",
   conflict: "That room is already booked for part of this time — pick another slot.",
   date: "That's not a date the board understands — pick one from the calendar.",
   invalid: "The end time has to be after the start time.",
   name: "Enter your name so the room knows who's got it.",
+  past: "That date has already passed — pick today or a date ahead.",
   room: "Pick a room.",
 };
 
@@ -72,7 +79,7 @@ const slotTimes = Array.from({ length: (gridEndMin - gridStartMin) / SLOT_MINUTE
 const gridRooms = roomsWithBookings.map(({ room, bookings }) => ({
   room,
   slots: slotTimes.map(({ start, end }) => {
-    if (isToday && end <= nowTime) {
+    if (isPastDate || (isToday && end <= nowTime)) {
       return { start, end, status: "past" as const, label: `${room.name}, ${start}–${end}, unavailable, past` };
     }
     const hit = bookings.find((b) => start < b.endTime && end > b.startTime);
