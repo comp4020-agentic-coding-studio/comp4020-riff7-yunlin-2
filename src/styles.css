@@ -201,16 +201,17 @@ nav[aria-label="date"] a:hover {
 }
 
 .avail-label {
-  flex: 0 0 9rem;
+  flex: 0 0 11rem;
   position: sticky;
   left: 0;
   background: var(--surface);
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: break-word;
+  padding-right: 0.5rem;
   z-index: 1;
 }
 
@@ -288,6 +289,16 @@ button.slot.selected {
   margin: 0.75rem 0 0;
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+/* A narrower fixed column leaves more of it for the scrollable time track —
+   the room name still wraps onto its second line rather than losing the
+   room number, same as the wider column above. */
+@media (max-width: 480px) {
+  .avail-label {
+    flex-basis: 7rem;
+    font-size: 0.72rem;
+  }
 }
 
 .room ul {
