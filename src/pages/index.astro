@@ -42,6 +42,11 @@ const isNowWithin = (start: string, end: string) => isToday && start <= nowTime 
 const dayStartMin = 0;
 const dayMinutes = 24 * 60;
 const nowPct = isToday ? (toMinutes(nowTime) / dayMinutes) * 100 : null;
+// Real library booking grids (LibCal, used across most university libraries)
+// put rooms in rows and time across columns, colouring cells by status rather
+// than by room — this board's own accent/warn colours already mean "now" and
+// "unconfirmed", so the grid reuses them instead of inventing a colour per room.
+const HOUR_LABELS = [0, 3, 6, 9, 12, 15, 18, 21];
 const roomsWithBookings = rooms.map((room) => ({
   room,
   bookings: bookingsForDate
@@ -133,6 +138,33 @@ const nextBoundaryTarget = isToday
         <a href={`/?date=${shiftDate(date, 1)}`}>{shiftDate(date, 1)} &rarr;</a>
       </nav>
 
+      <section class="grid-board" aria-hidden="true">
+        <div class="grid-row grid-row-header">
+          <span class="grid-label"></span>
+          <div class="grid-track grid-track-header">
+            {HOUR_LABELS.map((h) => (
+              <span class="hour-label" style={`left:${(h / 24) * 100}%`}>
+                {String(h).padStart(2, "0")}:00
+              </span>
+            ))}
+          </div>
+        </div>
+        {roomsWithBookings.map(({ room, bookings }) => (
+          <div class="grid-row">
+            <span class="grid-label">{room.name}</span>
+            <div class="grid-track">
+              {bookings.map((booking) => (
+                <div
+                  class={`grid-block${booking.stale ? " stale" : booking.active ? " active" : ""}`}
+                  style={`left:${booking.leftPct}%; width:${booking.widthPct}%`}
+                />
+              ))}
+              {nowPct !== null && <div class="grid-now-line" style={`left:${nowPct}%`} />}
+            </div>
+          </div>
+        ))}
+      </section>
+
       {error && (
         <p class="error" role="alert">
           {errorMessages[error] ?? "Something went wrong — try again."}
@@ -164,15 +196,6 @@ const nextBoundaryTarget = isToday
         {roomsWithBookings.map(({ room, bookings }, i) => (
           <section class="room" style={`--i: ${i}`} aria-labelledby={`room-${room.id}`}>
             <h2 id={`room-${room.id}`}>{room.name}</h2>
-            <div class="timeline" aria-hidden="true">
-              {bookings.map((booking) => (
-                <div
-                  class={`timeline-block${booking.stale ? " stale" : booking.active ? " active" : ""}`}
-                  style={`left:${booking.leftPct}%; width:${booking.widthPct}%`}
-                />
-              ))}
-              {nowPct !== null && <div class="timeline-now" style={`left:${nowPct}%`} />}
-            </div>
             <ul>
               {bookings.length === 0 && <li class="empty">Free all day</li>}
               {bookings.map((booking) => (
