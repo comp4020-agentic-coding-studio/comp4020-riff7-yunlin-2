@@ -101,6 +101,17 @@ const gridNowPct =
     ? ((toMinutes(nowTime) - gridStartMin) / (gridEndMin - gridStartMin)) * 100
     : null;
 
+// Riff: the booking form's From/To wheels only ever offer the same
+// 30-minute-aligned options the grid above already books in (GRID_START
+// through GRID_END inclusive) — one shared list of legal times for both the
+// grid and the form, rather than the free-form minute a native <input
+// type="time"> would accept.
+const wheelTimes = [...slotTimes.map(({ start }) => start), GRID_END];
+function snapToWheel(hhmm: string): string {
+  const idx = Math.round((toMinutes(hhmm) - gridStartMin) / SLOT_MINUTES);
+  return wheelTimes[Math.min(Math.max(idx, 0), wheelTimes.length - 1)];
+}
+
 // Riff: "find me a room now" — a duration in the `find` query param looks
 // for a room with nothing booked between now and now-plus-that-many-minutes,
 // and (if one exists) prefills the booking form with it. Only meaningful for
@@ -110,6 +121,18 @@ const findMinutes = isToday && Number.isInteger(findMinutesParam) && findMinutes
 const findWindowEnd = findMinutes !== null ? addMinutesToTime(nowTime, findMinutes) : null;
 const foundRoom = findWindowEnd !== null ? findFreeRoom(date, nowTime, findWindowEnd) : null;
 const findFailed = findMinutes !== null && foundRoom === null;
+
+// "Find a room now" fills in the exact current minute and a duration from
+// it, neither of which is necessarily one of the wheel's 30-minute options
+// — snapped only for this initial fill; the underlying find-a-room query
+// itself still runs on the real, unsnapped minute.
+const initialStart = snapToWheel(foundRoom ? nowTime : GRID_START);
+const initialEndRaw = foundRoom ? findWindowEnd! : (addMinutesToTime(GRID_START, SLOT_MINUTES) ?? GRID_END);
+const initialEndSnapped = snapToWheel(initialEndRaw);
+const initialEnd =
+  wheelTimes.indexOf(initialEndSnapped) > wheelTimes.indexOf(initialStart)
+    ? initialEndSnapped
+    : (wheelTimes[wheelTimes.indexOf(initialStart) + 1] ?? initialStart);
 
 // Passed to the client script below so a tab left open across a booking's
 // start/end minute — or across midnight, with no bookings left to wait for
@@ -291,17 +314,41 @@ const nextBoundaryTarget = isToday
           <input id="bookedBy" name="bookedBy" required maxlength="80" />
         </div>
         <div>
-          <label for="startTime">From</label>
-          <input id="startTime" name="startTime" type="time" required value={foundRoom ? nowTime : undefined} />
+          <label id="startTimeLabel">From</label>
+          <div class="time-field">
+            <div class="time-wheel" id="startTimeWheel" role="listbox" aria-labelledby="startTimeLabel" tabindex="0">
+              <div class="time-wheel-pad" aria-hidden="true"></div>
+              {wheelTimes.map((t) => (
+                <div class="time-wheel-option" role="option" data-value={t} aria-selected={t === initialStart ? "true" : "false"}>
+                  {t}
+                </div>
+              ))}
+              <div class="time-wheel-pad" aria-hidden="true"></div>
+            </div>
+            <div class="time-wheel-highlight" aria-hidden="true"></div>
+          </div>
+          <input type="hidden" id="startTime" name="startTime" value={initialStart} />
         </div>
         <div>
-          <label for="endTime">To</label>
-          <input id="endTime" name="endTime" type="time" required value={foundRoom ? findWindowEnd : undefined} />
+          <label id="endTimeLabel">To</label>
+          <div class="time-field">
+            <div class="time-wheel" id="endTimeWheel" role="listbox" aria-labelledby="endTimeLabel" tabindex="0">
+              <div class="time-wheel-pad" aria-hidden="true"></div>
+              {wheelTimes.map((t) => (
+                <div class="time-wheel-option" role="option" data-value={t} aria-selected={t === initialEnd ? "true" : "false"}>
+                  {t}
+                </div>
+              ))}
+              <div class="time-wheel-pad" aria-hidden="true"></div>
+            </div>
+            <div class="time-wheel-highlight" aria-hidden="true"></div>
+          </div>
+          <input type="hidden" id="endTime" name="endTime" value={initialEnd} />
         </div>
         <button>Book {date}</button>
       </form>
     </main>
-    <script is:inline define:vars={{ date, nextBoundaryTarget }}>
+    <script is:inline define:vars={{ date, nextBoundaryTarget, wheelTimes }}>
       // The board's live half: any tab looking at this same date reloads the
       // moment a booking is made or cancelled anywhere, so two people looking
       // at the same day never work from stale information. The form itself
@@ -362,9 +409,100 @@ const nextBoundaryTarget = isToday
       let anchor = null;
       const selectionEl = document.getElementById("avail-selection");
       const roomSelect = document.getElementById("roomId");
-      const startInput = document.getElementById("startTime");
-      const endInput = document.getElementById("endTime");
       const bookedByInput = document.getElementById("bookedBy");
+
+      // Riff: the From/To native <input type="time"> fields let a booking
+      // land on any minute, which the grid above never offers and the wheel
+      // below shouldn't either — a scrollable, snap-to-option list of the
+      // same 30-minute times as the grid, one per field, each backed by a
+      // hidden input carrying the plain HH:MM string the API already expects
+      // (src/pages/api/bookings.ts's TIME_RE), so nothing past this markup
+      // has to change.
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      function setupTimeWheel(wheelId, hiddenInputId, { minIndex, maxIndex, onSelect }) {
+        const wheel = document.getElementById(wheelId);
+        const hiddenInput = document.getElementById(hiddenInputId);
+        const options = Array.from(wheel.querySelectorAll(".time-wheel-option"));
+        const rowHeight = options[0].offsetHeight;
+        let settling = false;
+
+        function select(index, { smooth = true, notify = true } = {}) {
+          // Clamped to this wheel's own [minIndex, maxIndex] rather than
+          // [0, length-1] — From can never reach the last option, To can
+          // never reach the first, so "To later than From" always has room
+          // and the two wheels below never have to fight over the same slot.
+          index = Math.min(Math.max(index, minIndex), maxIndex);
+          for (const [i, option] of options.entries()) {
+            option.setAttribute("aria-selected", i === index ? "true" : "false");
+          }
+          hiddenInput.value = options[index].dataset.value;
+          settling = true;
+          const willAnimate = smooth && !reduceMotion;
+          wheel.scrollTo({ top: index * rowHeight, behavior: willAnimate ? "smooth" : "instant" });
+          // "instant" isn't recognised everywhere `scrollTo` is; a fixed
+          // settle delay (rather than waiting on a scrollend event Safari
+          // doesn't fire yet) covers both the smooth and instant cases.
+          setTimeout(() => (settling = false), willAnimate ? 260 : 0);
+          // `notify` is false only for the constructor's own initial call,
+          // made before the *other* field's wheel exists yet to sync with.
+          if (notify) onSelect?.(options[index].dataset.value);
+        }
+
+        let scrollSettle;
+        wheel.addEventListener("scroll", () => {
+          if (settling) return;
+          clearTimeout(scrollSettle);
+          scrollSettle = setTimeout(() => {
+            select(Math.round(wheel.scrollTop / rowHeight));
+          }, 120);
+        });
+        wheel.addEventListener("click", (e) => {
+          const option = e.target.closest(".time-wheel-option");
+          if (option) select(options.indexOf(option));
+        });
+        wheel.addEventListener("keydown", (e) => {
+          const current = options.findIndex((o) => o.getAttribute("aria-selected") === "true");
+          if (e.key === "ArrowDown") select(current + 1);
+          else if (e.key === "ArrowUp") select(current - 1);
+          else if (e.key === "Home") select(0);
+          else if (e.key === "End") select(options.length - 1);
+          else return;
+          e.preventDefault();
+        });
+
+        const api = {
+          get value() {
+            return hiddenInput.value;
+          },
+          get index() {
+            return options.findIndex((o) => o.getAttribute("aria-selected") === "true");
+          },
+          select,
+        };
+        const initialIndex = options.findIndex((o) => o.dataset.value === hiddenInput.value);
+        select(initialIndex === -1 ? 0 : initialIndex, { smooth: false, notify: false });
+        return api;
+      }
+
+      let startWheel;
+      let endWheel;
+      startWheel = setupTimeWheel("startTimeWheel", "startTime", {
+        minIndex: 0,
+        maxIndex: wheelTimes.length - 2,
+        onSelect(value) {
+          const startIdx = wheelTimes.indexOf(value);
+          if (endWheel.index <= startIdx) endWheel.select(startIdx + 1, { smooth: false });
+        },
+      });
+      endWheel = setupTimeWheel("endTimeWheel", "endTime", {
+        minIndex: 1,
+        maxIndex: wheelTimes.length - 1,
+        onSelect(value) {
+          const endIdx = wheelTimes.indexOf(value);
+          if (startWheel.index >= endIdx) startWheel.select(endIdx - 1, { smooth: false });
+        },
+      });
 
       function freeRun(room, fromIdx, toIdx) {
         const slots = byRoom[room];
@@ -387,8 +525,8 @@ const nextBoundaryTarget = isToday
         selectionEl.hidden = false;
         selectionEl.textContent = `${roomName}, ${start}-${end}`;
         roomSelect.value = room;
-        startInput.value = start;
-        endInput.value = end;
+        startWheel.select(wheelTimes.indexOf(start));
+        endWheel.select(wheelTimes.indexOf(end));
         bookedByInput?.focus();
       }
 

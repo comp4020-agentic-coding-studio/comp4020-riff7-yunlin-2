@@ -453,6 +453,68 @@ button.slot.selected {
   filter: brightness(1.08);
 }
 
+/* Riff: From/To wheel picker — a fixed 3-row window onto the 30-minute
+   options, snapped to the middle row via scroll-snap; the highlight bar is
+   drawn once, over that middle row, so the "current selection" affordance
+   doesn't need the reserved --accent (see CLAUDE.md: one colour, one
+   meaning — "happening now" on the grid, not this). */
+.time-field {
+  position: relative;
+}
+
+.time-wheel {
+  height: 8.25rem;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface-2);
+  scrollbar-width: none;
+}
+
+.time-wheel::-webkit-scrollbar {
+  display: none;
+}
+
+.time-wheel:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+.time-wheel-pad {
+  height: 2.75rem;
+}
+
+.time-wheel-option {
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: center;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  user-select: none;
+}
+
+.time-wheel-option[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 1.05em;
+}
+
+.time-wheel-highlight {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2.75rem;
+  transform: translateY(-50%);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  pointer-events: none;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
