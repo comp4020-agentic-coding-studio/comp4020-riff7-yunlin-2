@@ -100,6 +100,13 @@ const gridNowPct =
   isToday && nowTime >= GRID_START && nowTime < GRID_END
     ? ((toMinutes(nowTime) - gridStartMin) / (gridEndMin - gridStartMin)) * 100
     : null;
+// The "now" line is one element drawn once over the whole grid (see
+// .avail-now-line in src/styles.css), not one per room row — its left
+// offset is the room-label column's own width (kept in the same
+// --avail-label-width custom property .avail-label's flex-basis uses,
+// so the two can never drift apart) plus this percentage of the track's
+// own fixed width (slotTimes.length slots at button.slot's 2.5rem each).
+const trackWidthRem = slotTimes.length * 2.5;
 
 // Riff: the booking form's From/To wheels only ever offer the same
 // 30-minute-aligned options the grid above already books in (GRID_START
@@ -224,10 +231,16 @@ const nextBoundaryTarget = isToday
                     {slot.status === "booked" ? slot.bookedBy : slot.status === "past" ? "×" : ""}
                   </button>
                 ))}
-                {gridNowPct !== null && <span class="avail-now-line" style={`left:${gridNowPct}%`} aria-hidden="true" />}
               </div>
             </div>
           ))}
+          {gridNowPct !== null && (
+            <span
+              class="avail-now-line"
+              style={`--now-pct:${gridNowPct};--track-width:${trackWidthRem}rem;`}
+              aria-hidden="true"
+            />
+          )}
         </div>
         <p class="avail-selection" id="avail-selection" hidden></p>
       </section>

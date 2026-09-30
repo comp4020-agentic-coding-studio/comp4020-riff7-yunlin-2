@@ -179,6 +179,7 @@ nav[aria-label="date"] a:hover {
 }
 
 .avail-grid {
+  --avail-label-width: 11rem;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -189,6 +190,7 @@ nav[aria-label="date"] a:hover {
 }
 
 .avail-scroll {
+  position: relative;
   overflow-x: auto;
   display: grid;
   gap: 0.4rem;
@@ -201,7 +203,7 @@ nav[aria-label="date"] a:hover {
 }
 
 .avail-label {
-  flex: 0 0 11rem;
+  flex: 0 0 var(--avail-label-width);
   position: sticky;
   left: 0;
   background: var(--surface);
@@ -216,7 +218,6 @@ nav[aria-label="date"] a:hover {
 }
 
 .avail-track {
-  position: relative;
   display: flex;
 }
 
@@ -276,13 +277,20 @@ button.slot.selected {
   border-color: var(--link);
 }
 
+/* One line drawn once over the whole grid (not one per room row, which used
+   to read as several disconnected red segments) — its left offset lands it
+   in the same track column every row's slots occupy, since it's the same
+   room-label width plus the same percentage of the same fixed track width
+   every row uses (see trackWidthRem in src/pages/index.astro). */
 .avail-now-line {
   position: absolute;
-  top: -2px;
-  bottom: -2px;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--avail-label-width) + (var(--now-pct) / 100) * var(--track-width));
   width: 2px;
   background: var(--accent);
   pointer-events: none;
+  z-index: 2;
 }
 
 .avail-selection {
@@ -295,8 +303,10 @@ button.slot.selected {
    the room name still wraps onto its second line rather than losing the
    room number, same as the wider column above. */
 @media (max-width: 480px) {
+  .avail-grid {
+    --avail-label-width: 7rem;
+  }
   .avail-label {
-    flex-basis: 7rem;
     font-size: 0.72rem;
   }
 }
