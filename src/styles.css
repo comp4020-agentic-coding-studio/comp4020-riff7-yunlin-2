@@ -1,49 +1,112 @@
 :root {
-  --paper: #f6f3ec;
-  --ink: #23211d;
-  --line: #d8d2c4;
-  --seal: #8a3324;
+  --bg: #0b0d12;
+  --surface: #14171f;
+  --surface-2: #1b1f2a;
+  --ink: #e8e9ed;
+  --muted: #8b91a3;
+  --line: #262b38;
+  --accent: #ff5d5d;
+  --accent-glow: color-mix(in srgb, var(--accent) 35%, transparent);
+  --link: #7aa2ff;
+  --radius: 0.9rem;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root[data-theme="light"] {
+  --bg: #f3f4f8;
+  --surface: #ffffff;
+  --surface-2: #eceef4;
+  --ink: #1a1c22;
+  --muted: #666d80;
+  --line: #dde0e9;
+  --accent: #d63b3b;
+  --accent-glow: color-mix(in srgb, var(--accent) 20%, transparent);
+  --link: #2b57d6;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  padding: 2rem;
-  background: var(--paper);
+  padding: 2rem 1.25rem 4rem;
+  background: var(--bg);
   color: var(--ink);
-  font-family: Georgia, "Times New Roman", Times, serif;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.6;
+  transition:
+    background-color 0.3s var(--ease),
+    color 0.3s var(--ease);
 }
 
 main {
-  max-width: 42rem;
+  max-width: 44rem;
   margin: 0 auto;
+  animation: rise 0.5s var(--ease) both;
 }
 
 a {
-  color: #0b5fff;
+  color: var(--link);
+}
+
+h1 {
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
 }
 
 nav[aria-label="site"] {
   display: flex;
+  align-items: center;
   gap: 1rem;
   font-size: 0.9rem;
+}
+
+.theme-toggle {
+  margin-left: auto;
+  font: inherit;
+  font-size: 0.85rem;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+  transition:
+    background-color 0.2s var(--ease),
+    transform 0.15s var(--ease);
+}
+
+.theme-toggle:hover {
+  transform: translateY(-1px);
+  background: var(--surface-2);
 }
 
 nav[aria-label="date"] {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-block: 1.25rem;
+  margin-block: 1.5rem;
   font-size: 0.95rem;
 }
 
+nav[aria-label="date"] a {
+  text-decoration: none;
+  transition: opacity 0.15s var(--ease);
+}
+
+nav[aria-label="date"] a:hover {
+  opacity: 0.7;
+}
+
 .error {
-  border: 1px solid var(--ink);
-  border-width: 2px;
+  border: 1px solid var(--accent);
+  background: var(--accent-glow);
   color: var(--ink);
-  padding: 0.6rem 0.8rem;
-  border-radius: 0.25rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius);
   font-size: 0.95rem;
+  animation: rise 0.3s var(--ease) both;
 }
 
 .rooms {
@@ -53,14 +116,26 @@ nav[aria-label="date"] {
 }
 
 .room {
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 0.25rem;
-  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  opacity: 0;
+  animation: rise 0.5s var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+  transition:
+    border-color 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+
+.room:hover {
+  border-color: color-mix(in srgb, var(--link) 40%, var(--line));
 }
 
 .room h2 {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.6rem;
   font-size: 1.05rem;
+  font-weight: 600;
 }
 
 .room ul {
@@ -75,29 +150,37 @@ nav[aria-label="date"] {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 0.2rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s var(--ease);
 }
 
 .room li.active {
-  background: color-mix(in srgb, var(--seal) 12%, transparent);
-  border-left: 3px solid var(--seal);
+  background: var(--accent-glow);
+  border-left: 3px solid var(--accent);
+  animation: pulse 2.4s var(--ease) infinite;
 }
 
 .room li.active .time::after {
   content: " — now";
-  color: var(--seal);
+  color: var(--accent);
   font-style: italic;
+  font-weight: 600;
 }
 
 .room li.empty {
-  color: #6b6558;
+  color: var(--muted);
   font-style: italic;
 }
 
 .time {
   font-variant-numeric: tabular-nums;
   min-width: 8.5rem;
+  color: var(--muted);
+}
+
+.room li.active .time {
+  color: var(--ink);
 }
 
 .who {
@@ -110,52 +193,122 @@ nav[aria-label="date"] {
 
 .room button {
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   background: none;
+  color: var(--muted);
   border: 1px solid var(--line);
-  border-radius: 0.2rem;
-  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
   cursor: pointer;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    border-color 0.15s var(--ease);
+}
+
+.room button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--muted);
 }
 
 .book-form {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
+  gap: 0.9rem;
   align-items: end;
-  border-top: 1px solid var(--line);
-  padding-top: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+  opacity: 0;
+  animation: rise 0.5s var(--ease) both;
+  animation-delay: 120ms;
 }
 
 .book-form h2 {
   grid-column: 1 / -1;
   margin: 0;
   font-size: 1.05rem;
+  font-weight: 600;
 }
 
 .book-form label {
   display: block;
   font-size: 0.85rem;
-  margin-bottom: 0.2rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
 }
 
 .book-form input,
 .book-form select {
   width: 100%;
-  padding: 0.4rem 0.5rem;
+  padding: 0.5rem 0.6rem;
   font: inherit;
+  color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: 0.2rem;
-  background: white;
+  border-radius: 0.5rem;
+  background: var(--surface-2);
+  transition: border-color 0.15s var(--ease);
+}
+
+.book-form input:focus,
+.book-form select:focus {
+  outline: none;
+  border-color: var(--link);
 }
 
 .book-form button {
   grid-column: 1 / -1;
   font: inherit;
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--ink);
-  border-radius: 0.2rem;
-  background: var(--ink);
-  color: var(--paper);
+  font-weight: 600;
+  padding: 0.65rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: var(--link);
+  color: #0b0d12;
   cursor: pointer;
+  transition:
+    transform 0.15s var(--ease),
+    filter 0.15s var(--ease);
+}
+
+.book-form button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 0 4px var(--accent-glow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main,
+  .room,
+  .book-form,
+  .error {
+    animation: none;
+    opacity: 1;
+  }
+  .room li.active {
+    animation: none;
+  }
 }

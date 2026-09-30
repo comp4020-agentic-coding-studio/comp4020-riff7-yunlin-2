@@ -67,11 +67,23 @@ const nextBoundaryTarget = isToday
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>Room board</title>
+    <script is:inline>
+      // Set the theme before first paint so a returning visitor never sees a
+      // flash of the wrong theme — this has to run synchronously in <head>,
+      // before styles.css lays out anything the visitor would see it change.
+      try {
+        const saved = localStorage.getItem("theme");
+        if (saved) document.documentElement.setAttribute("data-theme", saved);
+      } catch {}
+    </script>
   </head>
   <body>
     <nav aria-label="site">
       <a href="/">Room board</a>
       <a href="/readme/">About</a>
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle light and dark theme">
+        <span aria-hidden="true">&#9788;/&#9789;</span>
+      </button>
     </nav>
     <main>
       <h1>Room board</h1>
@@ -93,8 +105,8 @@ const nextBoundaryTarget = isToday
       )}
 
       <div class="rooms">
-        {roomsWithBookings.map(({ room, bookings }) => (
-          <section class="room" aria-labelledby={`room-${room.id}`}>
+        {roomsWithBookings.map(({ room, bookings }, i) => (
+          <section class="room" style={`--i: ${i}`} aria-labelledby={`room-${room.id}`}>
             <h2 id={`room-${room.id}`}>{room.name}</h2>
             <ul>
               {bookings.length === 0 && <li class="empty">Free all day</li>}
@@ -184,6 +196,19 @@ const nextBoundaryTarget = isToday
       if (nextBoundaryTarget !== null) {
         setTimeout(() => location.reload(), Math.max(0, nextBoundaryTarget - Date.now()) + 5_000);
       }
+
+      // Theme toggle: a purely client-side preference, kept in localStorage
+      // and mirrored onto <html data-theme> — the <head> script above reads
+      // it back before paint on every page so it never flashes.
+      const toggle = document.getElementById("theme-toggle");
+      toggle?.addEventListener("click", () => {
+        const current = document.documentElement.getAttribute("data-theme") ?? "dark";
+        const next = current === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        try {
+          localStorage.setItem("theme", next);
+        } catch {}
+      });
     </script>
   </body>
 </html>
